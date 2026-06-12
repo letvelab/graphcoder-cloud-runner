@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, status
 from graphcoder_api.services import JobExecutionService
 from graphcoder_common.jobs import JobCreateRequest, JobResponse, create_queued_job
+from graphcoder_common.queue import InMemoryJobQueue, JobQueue, RedisJobQueue
 from graphcoder_common.runner import MockGraphCoderRunner
 from graphcoder_common.storage import FileJobRepository, JobNotFoundError
 from pydantic import BaseModel
@@ -20,7 +21,17 @@ def build_job_repository() -> FileJobRepository:
     return FileJobRepository(path=jobs_file)
 
 
+def build_job_queue() -> JobQueue:
+    redis_url = os.getenv("REDIS_URL")
+
+    if redis_url:
+        return RedisJobQueue(redis_url=redis_url)
+
+    return InMemoryJobQueue()
+
+
 job_repository = build_job_repository()
+job_queue = build_job_queue()
 graphcoder_runner = MockGraphCoderRunner()
 job_execution_service = JobExecutionService(
     repository=job_repository,
@@ -51,7 +62,11 @@ def create_app() -> FastAPI:
     )
     async def create_job(request: JobCreateRequest) -> JobResponse:
         job = create_queued_job(request)
-        return job_repository.save(job)
+        saved_job = job_repository.save(job)
+
+        await job_queue.enqueue(saved_job.job_id)
+
+        return saved_job
 
     @app.get("/jobs/{job_id}", response_model=JobResponse, tags=["jobs"])
     async def get_job(job_id: str) -> JobResponse:

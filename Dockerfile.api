@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV UV_SYSTEM_PYTHON=1
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir uv
+
+COPY pyproject.toml uv.lock ./
+
+RUN uv sync --frozen --no-dev
+
+COPY apps ./apps
+COPY packages ./packages
+
+ENV PYTHONPATH=/app/apps/api/src:/app/apps/worker/src:/app/packages/common/src
+ENV JOBS_FILE=/app/data/jobs.json
+
+EXPOSE 8000
+
+CMD ["uv", "run", "uvicorn", "graphcoder_api.main:app", "--host", "0.0.0.0", "--port", "8000"]

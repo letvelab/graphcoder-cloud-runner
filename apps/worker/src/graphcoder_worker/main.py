@@ -5,9 +5,10 @@ import os
 from pathlib import Path
 
 from graphcoder_api.services import JobExecutionService
-from graphcoder_common.jobs import JobResponse, JobStatus
+from graphcoder_common.jobs import JobResponse
+from graphcoder_common.queue import InMemoryJobQueue, JobQueue, RedisJobQueue
 from graphcoder_common.runner import MockGraphCoderRunner
-from graphcoder_common.storage import FileJobRepository, JobRepository
+from graphcoder_common.storage import FileJobRepository, JobNotFoundError, JobRepository
 
 
 def log_event(event: str, **fields: object) -> None:
@@ -18,24 +19,16 @@ def log_event(event: str, **fields: object) -> None:
     print(json.dumps(payload), flush=True)
 
 
-def process_next_queued_job(
-    repository: JobRepository,
+def process_job_by_id(
+    job_id: str,
     execution_service: JobExecutionService,
 ) -> JobResponse | None:
-    queued_jobs = repository.list_by_status(JobStatus.QUEUED)
-
-    if not queued_jobs:
+    try:
+        log_event("job_started", job_id=job_id)
+        completed_job = execution_service.run_job(job_id)
+    except JobNotFoundError:
+        log_event("job_not_found", job_id=job_id)
         return None
-
-    job = queued_jobs[0]
-
-    log_event(
-        "job_started",
-        job_id=job.job_id,
-        mode=job.mode,
-    )
-
-    completed_job = execution_service.run_job(job.job_id)
 
     log_event(
         "job_finished",
@@ -47,30 +40,45 @@ def process_next_queued_job(
 
 
 async def run_worker(
-    repository: JobRepository,
+    queue: JobQueue,
     execution_service: JobExecutionService,
-    poll_interval_seconds: float,
+    dequeue_timeout_seconds: int,
     once: bool,
 ) -> None:
     log_event("worker_started", once=once)
 
     while True:
-        completed_job = process_next_queued_job(
-            repository=repository,
+        job_id = await queue.dequeue(timeout_seconds=dequeue_timeout_seconds)
+
+        if job_id is None:
+            log_event("no_jobs_available")
+
+            if once:
+                return
+
+            continue
+
+        process_job_by_id(
+            job_id=job_id,
             execution_service=execution_service,
         )
 
         if once:
-            if completed_job is None:
-                log_event("no_queued_jobs")
             return
-
-        await asyncio.sleep(poll_interval_seconds)
 
 
 def build_repository() -> FileJobRepository:
     jobs_file = Path(os.getenv("JOBS_FILE", "data/jobs.json"))
     return FileJobRepository(path=jobs_file)
+
+
+def build_queue() -> JobQueue:
+    redis_url = os.getenv("REDIS_URL")
+
+    if redis_url:
+        return RedisJobQueue(redis_url=redis_url)
+
+    return InMemoryJobQueue()
 
 
 def parse_args() -> argparse.Namespace:
@@ -81,10 +89,10 @@ def parse_args() -> argparse.Namespace:
         help="Process one queued job and exit",
     )
     parser.add_argument(
-        "--poll-interval",
-        type=float,
-        default=2.0,
-        help="Polling interval in seconds",
+        "--dequeue-timeout",
+        type=int,
+        default=5,
+        help="Redis BLPOP timeout in seconds",
     )
     return parser.parse_args()
 
@@ -92,8 +100,10 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    repository = build_repository()
+    repository: JobRepository = build_repository()
+    queue = build_queue()
     runner = MockGraphCoderRunner()
+
     execution_service = JobExecutionService(
         repository=repository,
         runner=runner,
@@ -101,9 +111,9 @@ def main() -> None:
 
     asyncio.run(
         run_worker(
-            repository=repository,
+            queue=queue,
             execution_service=execution_service,
-            poll_interval_seconds=args.poll_interval,
+            dequeue_timeout_seconds=args.dequeue_timeout,
             once=args.once,
         )
     )
