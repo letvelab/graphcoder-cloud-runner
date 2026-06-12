@@ -1,4 +1,3 @@
-from graphcoder_api.storage import InMemoryJobRepository
 from graphcoder_common.jobs import (
     JobResponse,
     mark_job_failed,
@@ -6,12 +5,13 @@ from graphcoder_common.jobs import (
     mark_job_succeeded,
 )
 from graphcoder_common.runner import GraphCoderRunner
+from graphcoder_common.storage import JobRepository
 
 
 class JobExecutionService:
     def __init__(
         self,
-        repository: InMemoryJobRepository,
+        repository: JobRepository,
         runner: GraphCoderRunner,
     ) -> None:
         self._repository = repository

@@ -1,8 +1,11 @@
+import os
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, status
 from graphcoder_api.services import JobExecutionService
-from graphcoder_api.storage import InMemoryJobRepository, JobNotFoundError
 from graphcoder_common.jobs import JobCreateRequest, JobResponse, create_queued_job
 from graphcoder_common.runner import MockGraphCoderRunner
+from graphcoder_common.storage import FileJobRepository, JobNotFoundError
 from pydantic import BaseModel
 
 
@@ -12,7 +15,12 @@ class HealthResponse(BaseModel):
     version: str
 
 
-job_repository = InMemoryJobRepository()
+def build_job_repository() -> FileJobRepository:
+    jobs_file = Path(os.getenv("JOBS_FILE", "data/jobs.json"))
+    return FileJobRepository(path=jobs_file)
+
+
+job_repository = build_job_repository()
 graphcoder_runner = MockGraphCoderRunner()
 job_execution_service = JobExecutionService(
     repository=job_repository,

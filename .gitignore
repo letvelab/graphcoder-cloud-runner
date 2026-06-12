@@ -54,3 +54,5 @@ logs/
 artifacts/
 tmp/
 workspace/
+
+data/
