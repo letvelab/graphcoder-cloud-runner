@@ -21,5 +21,12 @@ class InMemoryJobRepository:
 
         return job
 
+    def update(self, job: JobResponse) -> JobResponse:
+        if job.job_id not in self._jobs:
+            raise JobNotFoundError(f"Job not found: {job.job_id}")
+
+        self._jobs[job.job_id] = job
+        return job
+
     def clear(self) -> None:
         self._jobs.clear()

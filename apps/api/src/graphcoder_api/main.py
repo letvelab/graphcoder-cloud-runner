@@ -1,6 +1,8 @@
 from fastapi import FastAPI, HTTPException, status
+from graphcoder_api.services import JobExecutionService
 from graphcoder_api.storage import InMemoryJobRepository, JobNotFoundError
 from graphcoder_common.jobs import JobCreateRequest, JobResponse, create_queued_job
+from graphcoder_common.runner import MockGraphCoderRunner
 from pydantic import BaseModel
 
 
@@ -11,6 +13,11 @@ class HealthResponse(BaseModel):
 
 
 job_repository = InMemoryJobRepository()
+graphcoder_runner = MockGraphCoderRunner()
+job_execution_service = JobExecutionService(
+    repository=job_repository,
+    runner=graphcoder_runner,
+)
 
 
 def create_app() -> FastAPI:
@@ -42,6 +49,16 @@ def create_app() -> FastAPI:
     async def get_job(job_id: str) -> JobResponse:
         try:
             return job_repository.get(job_id)
+        except JobNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Job not found",
+            ) from exc
+
+    @app.post("/jobs/{job_id}/run", response_model=JobResponse, tags=["jobs"])
+    async def run_job(job_id: str) -> JobResponse:
+        try:
+            return job_execution_service.run_job(job_id)
         except JobNotFoundError as exc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
