@@ -6,8 +6,13 @@ from graphcoder_api.services import JobExecutionService
 from graphcoder_common.jobs import JobCreateRequest, JobResponse, create_queued_job
 from graphcoder_common.queue import InMemoryJobQueue, JobQueue, RedisJobQueue
 from graphcoder_common.runner import MockGraphCoderRunner
-from graphcoder_common.storage import FileJobRepository, JobNotFoundError
 from pydantic import BaseModel
+from graphcoder_common.storage import (
+    FileJobRepository,
+    JobNotFoundError,
+    JobRepository,
+    RedisJobRepository,
+)
 
 
 class HealthResponse(BaseModel):
@@ -16,7 +21,12 @@ class HealthResponse(BaseModel):
     version: str
 
 
-def build_job_repository() -> FileJobRepository:
+def build_job_repository() -> JobRepository:
+    redis_url = os.getenv("REDIS_URL")
+
+    if redis_url:
+        return RedisJobRepository(redis_url=redis_url)
+
     jobs_file = Path(os.getenv("JOBS_FILE", "data/jobs.json"))
     return FileJobRepository(path=jobs_file)
 

@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 from typing import Protocol
 
+import redis
+
 from graphcoder_common.jobs import JobResponse, JobStatus
 
 
@@ -57,6 +59,13 @@ class InMemoryJobRepository:
 
 
 class FileJobRepository:
+    """
+    Local development repository.
+
+    This is useful for simple local experiments, but it is NOT a good
+    Kubernetes storage model because API and worker run in different Pods.
+    """
+
     def __init__(self, path: Path) -> None:
         self._path = path
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -122,3 +131,72 @@ class FileJobRepository:
             encoding="utf-8",
         )
         tmp_path.replace(self._path)
+
+
+class RedisJobRepository:
+    """
+    Redis-backed job state repository.
+
+    We use this for Docker Compose and Kubernetes because API and worker
+    can both access Redis through the network.
+
+    Data model:
+      Redis hash:
+        key: graphcoder:job-state
+        field: job_id
+        value: serialized JobResponse JSON
+    """
+
+    def __init__(
+        self,
+        redis_url: str,
+        key: str = "graphcoder:job-state",
+    ) -> None:
+        self._redis = redis.Redis.from_url(
+            redis_url,
+            decode_responses=True,
+        )
+        self._key = key
+
+    def save(self, job: JobResponse) -> JobResponse:
+        self._redis.hset(
+            self._key,
+            job.job_id,
+            self._serialize(job),
+        )
+        return job
+
+    def get(self, job_id: str) -> JobResponse:
+        raw_job = self._redis.hget(self._key, job_id)
+
+        if raw_job is None:
+            raise JobNotFoundError(f"Job not found: {job_id}")
+
+        return self._deserialize(raw_job)
+
+    def update(self, job: JobResponse) -> JobResponse:
+        if not self._redis.hexists(self._key, job.job_id):
+            raise JobNotFoundError(f"Job not found: {job.job_id}")
+
+        self._redis.hset(
+            self._key,
+            job.job_id,
+            self._serialize(job),
+        )
+        return job
+
+    def list_by_status(self, status: JobStatus) -> list[JobResponse]:
+        raw_jobs = self._redis.hvals(self._key)
+
+        jobs = [self._deserialize(raw_job) for raw_job in raw_jobs]
+
+        return [job for job in jobs if job.status == status]
+
+    def clear(self) -> None:
+        self._redis.delete(self._key)
+
+    def _serialize(self, job: JobResponse) -> str:
+        return job.model_dump_json()
+
+    def _deserialize(self, raw_job: str) -> JobResponse:
+        return JobResponse.model_validate_json(raw_job)

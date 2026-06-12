@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: graphcoder-worker
+  namespace: graphcoder
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: graphcoder-worker
+
+  template:
+    metadata:
+      labels:
+        app: graphcoder-worker
+
+    spec:
+      containers:
+        - name: worker
+          image: graphcoder-worker:local
+          imagePullPolicy: IfNotPresent
+
+          envFrom:
+            - configMapRef:
+                name: graphcoder-config
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

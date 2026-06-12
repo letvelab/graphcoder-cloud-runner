@@ -14,6 +14,7 @@ services:
       retries: 10
 
   api:
+    image: graphcoder-api:local
     build:
       context: .
       dockerfile: Dockerfile.api
@@ -22,9 +23,6 @@ services:
       - "8000:8000"
     environment:
       REDIS_URL: redis://redis:6379/0
-      JOBS_FILE: /app/data/jobs.json
-    volumes:
-      - ./data:/app/data
     depends_on:
       redis:
         condition: service_healthy
@@ -41,15 +39,13 @@ services:
       retries: 10
 
   worker:
+    image: graphcoder-worker:local
     build:
       context: .
       dockerfile: Dockerfile.worker
     container_name: graphcoder-worker
     environment:
       REDIS_URL: redis://redis:6379/0
-      JOBS_FILE: /app/data/jobs.json
-    volumes:
-      - ./data:/app/data
     depends_on:
       redis:
         condition: service_healthy
