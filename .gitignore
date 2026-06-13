@@ -56,3 +56,20 @@ tmp/
 workspace/
 
 data/
+
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Local terraform variables
+terraform.tfvars
+*.auto.tfvars

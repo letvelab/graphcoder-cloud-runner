@@ -1,8 +1,9 @@
 PYTHONPATH := apps/api/src:apps/worker/src:packages/common/src
 REDIS_URL := redis://localhost:6379/0
 JOBS_FILE := data/jobs.json
+TF_DEV_DIR := infra/terraform/envs/dev
 
-.PHONY: help init test lint format check run-api run-worker run-worker-once redis-up redis-down redis-logs docker-build docker-up docker-down docker-logs docker-ps clean-data
+.PHONY: help init test lint format check run-api run-worker run-worker-once redis-up redis-down redis-logs docker-build docker-up docker-down docker-logs docker-ps clean-data tf-init tf-fmt tf-validate tf-plan tf-apply tf-destroy
 
 help:
 	@echo "Available commands:"
@@ -23,6 +24,12 @@ help:
 	@echo "  make docker-logs      - Show all Docker logs"
 	@echo "  make docker-ps        - Show Docker containers"
 	@echo "  make clean-data       - Remove local job data"
+	@echo "  make tf-init          - Initialize Terraform dev environment"
+	@echo "  make tf-fmt           - Format Terraform files"
+	@echo "  make tf-validate      - Validate Terraform configuration"
+	@echo "  make tf-plan          - Show Terraform execution plan"
+	@echo "  make tf-apply         - Apply Terraform changes"
+	@echo "  make tf-destroy       - Destroy Terraform-managed resources"
 
 init:
 	uv sync
@@ -78,3 +85,21 @@ docker-ps:
 
 clean-data:
 	rm -rf data
+
+tf-init:
+	cd $(TF_DEV_DIR) && terraform init
+
+tf-fmt:
+	cd $(TF_DEV_DIR) && terraform fmt -recursive
+
+tf-validate:
+	cd $(TF_DEV_DIR) && terraform validate
+
+tf-plan:
+	cd $(TF_DEV_DIR) && terraform plan
+
+tf-apply:
+	cd $(TF_DEV_DIR) && terraform apply
+
+tf-destroy:
+	cd $(TF_DEV_DIR) && terraform destroy
