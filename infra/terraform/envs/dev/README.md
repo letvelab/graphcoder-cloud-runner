@@ -2,14 +2,13 @@
 
 This directory contains Terraform configuration for the dev environment.
 
-## Current step
+## Current resources
 
-This step does not create paid AWS resources yet.
+This environment creates:
 
-It only validates Terraform setup and reads:
-
-- current AWS account ID
-- current AWS region
+- ECR repository for API image
+- ECR repository for worker image
+- ECR lifecycle policies for cleanup
 
 ## Commands
 
@@ -18,3 +17,5 @@ terraform init
 terraform fmt
 terraform validate
 terraform plan
+terraform apply
+terraform destroy

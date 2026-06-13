@@ -2,8 +2,16 @@ PYTHONPATH := apps/api/src:apps/worker/src:packages/common/src
 REDIS_URL := redis://localhost:6379/0
 JOBS_FILE := data/jobs.json
 TF_DEV_DIR := infra/terraform/envs/dev
+AWS_PROFILE ?= ai-langgraph
+AWS_REGION ?= eu-central-1
 
-.PHONY: help init test lint format check run-api run-worker run-worker-once redis-up redis-down redis-logs docker-build docker-up docker-down docker-logs docker-ps clean-data tf-init tf-fmt tf-validate tf-plan tf-apply tf-destroy
+ECR_API_REPOSITORY ?= graphcoder-cloud-runner-dev-api
+ECR_WORKER_REPOSITORY ?= graphcoder-cloud-runner-dev-worker
+
+IMAGE_TAG ?= latest
+
+
+.PHONY: help init test lint format check run-api run-worker run-worker-once redis-up redis-down redis-logs docker-build docker-up docker-down docker-logs docker-ps clean-data tf-init tf-fmt tf-validate tf-plan tf-apply tf-destroy aws-whoami ecr-login ecr-build-local ecr-tag ecr-push
 
 help:
 	@echo "Available commands:"
@@ -30,6 +38,11 @@ help:
 	@echo "  make tf-plan          - Show Terraform execution plan"
 	@echo "  make tf-apply         - Apply Terraform changes"
 	@echo "  make tf-destroy       - Destroy Terraform-managed resources"
+	@echo "  make aws-whoami       - Show current AWS identity"
+	@echo "  make ecr-login        - Login Docker to AWS ECR"
+	@echo "  make ecr-build-local  - Build local API and worker images"
+	@echo "  make ecr-tag          - Tag local images for ECR"
+	@echo "  make ecr-push         - Push images to ECR"
 
 init:
 	uv sync
@@ -103,3 +116,24 @@ tf-apply:
 
 tf-destroy:
 	cd $(TF_DEV_DIR) && terraform destroy
+
+aws-whoami:
+	aws sts get-caller-identity
+
+ecr-login:
+	ACCOUNT_ID=$$(AWS_PROFILE=$(AWS_PROFILE) aws sts get-caller-identity --query Account --output text); \
+	ECR_REGISTRY=$$ACCOUNT_ID.dkr.ecr.$(AWS_REGION).amazonaws.com; \
+	AWS_PROFILE=$(AWS_PROFILE) aws ecr get-login-password --region $(AWS_REGION) | \
+	docker login --username AWS --password-stdin $$ECR_REGISTRY
+
+ecr-tag:
+	ACCOUNT_ID=$$(AWS_PROFILE=$(AWS_PROFILE) aws sts get-caller-identity --query Account --output text); \
+	ECR_REGISTRY=$$ACCOUNT_ID.dkr.ecr.$(AWS_REGION).amazonaws.com; \
+	docker tag graphcoder-api:local $$ECR_REGISTRY/$(ECR_API_REPOSITORY):$(IMAGE_TAG); \
+	docker tag graphcoder-worker:local $$ECR_REGISTRY/$(ECR_WORKER_REPOSITORY):$(IMAGE_TAG)
+
+ecr-push: ecr-login ecr-tag
+	ACCOUNT_ID=$$(AWS_PROFILE=$(AWS_PROFILE) aws sts get-caller-identity --query Account --output text); \
+	ECR_REGISTRY=$$ACCOUNT_ID.dkr.ecr.$(AWS_REGION).amazonaws.com; \
+	docker push $$ECR_REGISTRY/$(ECR_API_REPOSITORY):$(IMAGE_TAG); \
+	docker push $$ECR_REGISTRY/$(ECR_WORKER_REPOSITORY):$(IMAGE_TAG)
