@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+images:
+  - name: graphcoder-api
+    newName: 034827030859.dkr.ecr.eu-central-1.amazonaws.com/gcr-runner-dev-api
+    newTag: latest
+
+  - name: graphcoder-worker
+    newName: 034827030859.dkr.ecr.eu-central-1.amazonaws.com/gcr-runner-dev-worker
+    newTag: latest

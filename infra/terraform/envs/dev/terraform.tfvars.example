@@ -2,3 +2,11 @@ aws_region   = "eu-central-1"
 project_name = "graphcoder-cloud-runner"
 environment  = "dev"
 owner        = "mykhailo"
+
+eks_cluster_version = "1.33"
+
+cluster_endpoint_public_access_cidrs = ["178.212.96.51/0"]
+
+node_instance_types = ["t3.small", "t3a.small"]
+
+node_capacity_type = "SPOT"

@@ -2,16 +2,21 @@ PYTHONPATH := apps/api/src:apps/worker/src:packages/common/src
 REDIS_URL := redis://localhost:6379/0
 JOBS_FILE := data/jobs.json
 TF_DEV_DIR := infra/terraform/envs/dev
+TF_DEV_DIR := infra/terraform/envs/dev
+AWS_REGION := eu-central-1
+PROJECT_NAME := gcr-runner
+ENVIRONMENT := dev
 AWS_PROFILE ?= ai-langgraph
 AWS_REGION ?= eu-central-1
-
-ECR_API_REPOSITORY ?= graphcoder-cloud-runner-dev-api
-ECR_WORKER_REPOSITORY ?= graphcoder-cloud-runner-dev-worker
+ECR_API_REPOSITORY := $(PROJECT_NAME)-$(ENVIRONMENT)-api
+ECR_WORKER_REPOSITORY := $(PROJECT_NAME)-$(ENVIRONMENT)-worker
+EKS_CLUSTER_NAME := $(PROJECT_NAME)-$(ENVIRONMENT)-eks
 
 IMAGE_TAG ?= latest
 
 
-.PHONY: help init test lint format check run-api run-worker run-worker-once redis-up redis-down redis-logs docker-build docker-up docker-down docker-logs docker-ps clean-data tf-init tf-fmt tf-validate tf-plan tf-apply tf-destroy aws-whoami ecr-login ecr-build-local ecr-tag ecr-push
+
+.PHONY: help init test lint format check run-api run-worker run-worker-once redis-up redis-down redis-logs docker-build docker-up docker-down docker-logs docker-ps clean-data tf-init tf-fmt tf-validate tf-plan tf-apply tf-destroy aws-whoami ecr-login ecr-build-local ecr-tag ecr-push tf-init-upgrade eks-update-kubeconfig eks-nodes eks-pods eks-cluster-info
 
 help:
 	@echo "Available commands:"
@@ -43,6 +48,11 @@ help:
 	@echo "  make ecr-build-local  - Build local API and worker images"
 	@echo "  make ecr-tag          - Tag local images for ECR"
 	@echo "  make ecr-push         - Push images to ECR"
+	@echo "  make tf-init-upgrade       - Reinitialize Terraform and upgrade providers/modules"
+	@echo "  make eks-update-kubeconfig - Configure kubectl for EKS"
+	@echo "  make eks-nodes             - Show EKS nodes"
+	@echo "  make eks-pods              - Show all Kubernetes pods"
+	@echo "  make eks-cluster-info      - Show Kubernetes cluster info"
 
 init:
 	uv sync
@@ -137,3 +147,18 @@ ecr-push: ecr-login ecr-tag
 	ECR_REGISTRY=$$ACCOUNT_ID.dkr.ecr.$(AWS_REGION).amazonaws.com; \
 	docker push $$ECR_REGISTRY/$(ECR_API_REPOSITORY):$(IMAGE_TAG); \
 	docker push $$ECR_REGISTRY/$(ECR_WORKER_REPOSITORY):$(IMAGE_TAG)
+
+tf-init-upgrade:
+	cd $(TF_DEV_DIR) && terraform init -upgrade
+
+eks-update-kubeconfig:
+	aws eks update-kubeconfig --region $(AWS_REGION) --name $(EKS_CLUSTER_NAME)
+
+eks-nodes:
+	kubectl get nodes -o wide
+
+eks-pods:
+	kubectl get pods -A
+
+eks-cluster-info:
+	kubectl cluster-info
